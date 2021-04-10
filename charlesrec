@@ -1,0 +1,66 @@
+#!/bin/bash
+
+CHARLES=/Applications/Charles.app/Contents/MacOS/Charles
+
+kill_charles() {
+  CHARLES_PID=$1
+  echo "stopping Charles (pid: $CHARLES_PID)"
+  curl --silent -I --proxy http://localhost:8888 --fail http://control.charles/quit >/dev/zero
+  for i in {1..5};
+  do
+    sleep 2
+    kill -0 $CHARLES_PID >/dev/zero 2>&1
+    if [ $? == 0 ]; then
+      continue
+    else
+      return
+    fi
+  done
+  kill -9 $CHARLES_PID >/dev/zero 2>&1
+}
+
+exit_tasks() {
+  CHARLES_PID=$1
+  TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
+  RANDOM=$(date +%s%N | cut -b10-19)
+  echo 'downloading har file...'
+  curl --proxy http://localhost:8888 --fail http://control.charles/session/export-har -o "charles_$TIMESTAMP_$RANDOM.har"
+  # recording can't be stopped before the file is downloaded (otherwise the file contains webinterface html)
+  echo 'stopping recording...'
+  curl --silent -I --proxy http://localhost:8888 --fail http://control.charles/recording/stop >/dev/zero
+  kill_charles $CHARLES_PID
+  echo "done, saved to file: charles_$TIMESTAMP_$RANDOM.har"
+  exit 0
+}
+
+trap "kill_charles $CHARLES_PID" SIGINT SIGTERM
+
+$CHARLES -headless >/dev/zero 2>&1 &
+CHARLES_PID=$!
+
+# wait until webinterface is up
+while true
+do
+  curl --silent -I --proxy http://localhost:8888 --fail http://control.charles/ >/dev/zero
+  if [ $? == 0 ]; then
+    echo 'charles webinterface is running'
+    break
+  fi
+done
+
+curl --silent -I --proxy http://localhost:8888 --fail http://control.charles/recording/start >/dev/zero
+if [ $? != 0 ]; then
+  echo 'could not start recording, quitting...'
+  kill_charles $CHARLES_PID
+  exit 1
+fi
+
+echo 'recording started (press CTRL+C to stop and save)'
+trap "exit_tasks $CHARLES_PID" SIGINT SIGTERM
+
+while true
+do
+  sleep 2
+done
+
+
