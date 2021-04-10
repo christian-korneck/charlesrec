@@ -5,6 +5,7 @@ A tiny shellscript wrapper around [Charles](https://www.charlesproxy.com/) to qu
 ## Setup
 
 - fully configure charles in the GUI (i.e. enable SSL, etc)
+- in the GUI, enable the webinterface and allow anonymous access 
 - in the script change the path to the `Charles` executable (`CHARLES=<path>`)
 
 ## Usage
